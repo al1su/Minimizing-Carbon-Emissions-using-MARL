@@ -1,0 +1,125 @@
+def simulate_episode_MARL(env, rule, L, agents_n=3, gamma=0.9, max_iter=100000, convergence_threshold = 1e-3, convergence_window = 100):
+
+  agents = [QAgent() for _ in range(agents_n)]  # Create 3 agents
+  # Initialize data structures
+  action_table = {}
+  opponent_actions = {}
+  myactions = {}
+  Q_table = {}
+
+  myactions[0] = np.arange(1, 21)
+  myactions[1] = np.arange(41, 61)
+  myactions[2] = np.arange(81, 101)
+
+  for k in range(agents_n):
+    opponent_actions[k] = [(myactions[i], myactions[j]) for i in range(agents_n) for j in range(i + 1, agents_n) if i != k and j != k]
+    Q_table[k] = Qtable(myactions[k], opponent_actions[k]).q_table
+    action_table[k] = agents[k].generate_action_table(myactions[k], opponent_actions[k]) #initialize action table
+
+  # Initialize variables for tracking the state, actions, and rewards
+  opponent_current_action = {k: [] for k in range(agents_n)}
+  opponent_next_action = {k: [] for k in range(agents_n)}
+  current_action = {k: [] for k in range(agents_n)}
+  next_action = {k: [] for k in range(agents_n)}
+  current_state = {k: [] for k in range(agents_n)}
+  next_state = {k: [] for k in range(agents_n)}
+  pi_ep = {k: [] for k in range(agents_n)}
+  q_ep = {k: [] for k in range(agents_n)}
+  cost_ep = {k: [] for k in range(agents_n)}
+  last_rewards = {k: [] for k in range(agents_n)}
+  predict_opponent_action = [[] for _ in range(agents_n)]
+  converged = [False] * agents_n
+  profit = [[] for _ in range(agents_n)]
+  cost = [[] for _ in range(agents_n)]
+
+  for t in range(max_iter):
+    if all(converged):
+      print(f"All agents have converged by iteration {t}.")
+      converget = t
+      break
+    # print('iter', t)
+    alpha = 0.6 * np.exp(-0.0001 * t)
+    epsilon = 0.1 ** (4 * t / max_iter)
+
+    if t == 0:
+      for k in range(agents_n): #initialize first action for all agents.
+        current_action[k].append(np.random.choice(myactions[k])) #initialize current and next actions
+        # print('agent', k, 'current action:', current_action[k])
+        action_table[k] = agents[k].generate_action_table(myactions[k], opponent_actions[k]) #initialize action table
+
+      for k in range(agents_n): #set opponents actions = current actions of other agents
+        opponent_current_action[k].extend([(current_action[i], current_action[j]) for i in range(agents_n) for j in range(i + 1, agents_n) if i != k and j != k])
+        # print('opponent_current_action:', opponent_current_action[k][t][0][0])
+        current_state[k].append(agents[k].get_state(current_action[k][t], opponent_current_action[k][t][0][0], opponent_current_action[k][t][1][0]))
+        # print('agent', k, 'current_state:', current_state[k][t])
+        next_action[k].append(agents[k].choose_action(Q_table[k], myactions[k], current_state[k][t], t))
+        # print('agent', k, 'next action:', next_action[k])
+        action_table[k][current_action[k][t]][(opponent_current_action[k][t][0][0], opponent_current_action[k][t][1][0])] += 1
+
+      for k in range(agents_n):
+        opponent_next_action[k].extend([(next_action[i], next_action[j]) for i in range(agents_n) for j in range(i + 1, agents_n) if i != k and j != k])
+        # print('opponent next action:', opponent_next_action[k])
+        if np.random.rand() < epsilon:
+          predict_opponent_action[k] = (np.random.choice(opponent_actions[k][0][0]), np.random.choice(opponent_actions[k][0][1]) )
+        else:
+          predict_opponent_action[k] = agents[k].predict_opponents_actions(k, action_table, next_action)
+        # print('agent', k, 'prediction:', predict_opponent_action[k])
+        next_state[k].append(agents[k].get_state(next_action[k][t], predict_opponent_action[k][0], predict_opponent_action[k][1]))
+
+    else:
+      for k in range(agents_n):
+        current_action[k].append(next_action[k][t-1])
+        # print('agent', k, 'current action', current_action[k][t])
+
+      for k in range(agents_n):
+        opponent_current_action[k].extend([(current_action[i], current_action[j]) for i in range(agents_n) for j in range(i + 1, agents_n) if i != k and j != k])
+        # print('opp current action', opponent_current_action[k][t][0][0])
+        current_state[k].append(agents[k].get_state(current_action[k][t], opponent_current_action[k][t][0][0], opponent_current_action[k][t][1][0]))
+        # print('current state:', current_state[k][t])
+        # print(Q_table[k])
+        # print('current_state:', current_state[k][t])
+        # print('qtable', Q_table[k][current_state[k][t]])
+        next_action[k].append(agents[k].choose_action(Q_table[k], myactions[k], current_state[k][t], t))
+        action_table[k][current_action[k][t]][(opponent_current_action[k][t][0][0], opponent_current_action[k][t][1][0])] += 1
+
+      for k in range(agents_n):
+        opponent_next_action[k].extend([(next_action[i], next_action[j]) for i in range(agents_n) for j in range(i + 1, agents_n) if i != k and j != k])
+        if np.random.rand() < epsilon:
+          predict_opponent_action[k] = (np.random.choice(opponent_actions[k][0][0]), np.random.choice(opponent_actions[k][0][1]) )
+        else:
+          predict_opponent_action[k] = agents[k].predict_opponents_actions(k, action_table, current_action[k][t])
+        # print('agent', k, 'prediction:', predict_opponent_action[k])
+        next_state[k].append(agents[k].get_state(next_action[k][t], predict_opponent_action[k][0], predict_opponent_action[k][1]))
+
+    for k in range(agents_n):
+      cost = rule(current_action[k][t], opponent_current_action[k][t])
+      profit[k] = (20 *current_action[k][t]) - cost
+
+      Q_table[k][current_state[k][t]][current_action[k][t]] += alpha * (profit[k] + gamma * Q_table[k][next_state[k][t]][next_action[k][t]] - Q_table[k][current_state[k][t]][current_action[k][t]])
+      pi_ep[k].append(profit[k])
+      q_ep[k].append(current_action[k][t])
+      cost_ep[k].append(cost)
+
+      # Store recent rewards for convergence check
+      last_rewards[k].append(profit[k])
+      if len(last_rewards[k]) > convergence_window:
+        last_rewards[k].pop(0)
+
+      # Check for convergence
+      if len(last_rewards[k]) >= convergence_window:
+        recent_q_values = q_ep[k][-convergence_window:]
+        recent_q_diff = np.max(np.abs(np.diff(recent_q_values)))
+        if recent_q_diff < convergence_threshold:
+          converged[k] = True
+
+      pi0 = pi_ep[0][-L:]
+      pi1 = pi_ep[1][-L:]
+      pi2 = pi_ep[2][-L:]
+      q0 = q_ep[0][-L:]
+      q1 = q_ep[1][-L:]
+      q2 = q_ep[2][-L:]
+      c0 = cost_ep[0][-L:]
+      c1 = cost_ep[1][-L:]
+      c2 = cost_ep[2][-L:]
+
+  return pi0,pi1,pi2,q0,q1,q2,c0,c1,c2,converget
