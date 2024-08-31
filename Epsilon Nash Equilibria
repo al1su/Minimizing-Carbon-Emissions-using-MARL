@@ -1,0 +1,13 @@
+def is_epsilon_nash_equilibrium(actions, payoffs, epsilon):
+    num_agents = len(actions)
+
+    for i in range(num_agents):
+        current_action = actions[i]
+        current_payoff = payoffs[i][0]  # Since each agent's payoff is represented as a list with one value
+
+        for alternative_action in range(len(payoffs[i])):
+            if alternative_action != current_action:
+                alternative_payoff = payoffs[i][alternative_action]
+                if alternative_payoff > current_payoff + epsilon:
+                    return False
+    return True
