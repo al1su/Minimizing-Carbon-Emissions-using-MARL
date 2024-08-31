@@ -1,0 +1,87 @@
+import numpy as np
+import random
+import math
+from itertools import product
+
+class Environment:
+    """ Economic environment. """
+    def __init__(self, agents=3, batch_size=5):
+        self.agents_n = agents
+        self.batch_size = batch_size
+
+    def step(self, actions):
+        """Simulate the environment step."""
+        next_state = np.random.choice(self.Qs, size=self.agents_n)  # Random next state
+        rewards = np.random.rand(self.agents_n)  # Random rewards
+        done = np.random.choice([True, False])  # Random done
+        info = {}  # Additional info
+        return next_state, rewards, done, info
+
+    def reset(self):
+        """Reset the environment to the initial state."""
+        self.action = [np.random.choice(self.Qs, size=1)[0] for _ in range(self.agents_n)]
+        return self.action
+
+    def serial(self, current_action, opponent_actions):
+      # Combine all actions into a single demand list
+      opp1_action = opponent_actions[0][0]
+      opp2_action = opponent_actions[1][0]
+      demand = [current_action, opp1_action, opp2_action]
+
+      # Determine the number of participants
+      n = len(demand)
+
+      # Sort the demands and get their original indices
+      order = np.argsort(demand)
+
+      # Initialize intermediate cost allocation array
+      intermediate = np.zeros(n)
+
+      # Calculate intermediate demand steps
+      intermediate[0] = n * demand[order[0]]
+      intermediate[1] = demand[order[0]]+2*demand[order[1]]
+
+      intermediate[2] = sum(demand)
+
+      def costfunc(quantity, fixed_cost=10, variable_cost=0.06):
+        total_cost = variable_cost * quantity**2
+        return total_cost
+
+      # Initialize cost shares array
+      order_cost_shares = np.zeros(n)
+
+      # Calculate the cost shares for the sorted demands
+      order_cost_shares[0] = (costfunc(intermediate[0]) - costfunc(0)) / n
+      order_cost_shares[1] = (costfunc(intermediate[1])- costfunc(intermediate[0]))/2
+      order_cost_shares[2] = (costfunc(intermediate[2]) - costfunc(intermediate[1]))*2
+
+      # Reorder the cost shares to match the original order of demands
+      cost_shares = np.zeros(n)
+      for i in range(n):
+        cost_shares[order[i]] = order_cost_shares[i]
+
+      # Return the cost share for the current agent (assuming the first position in demand list)
+      return cost_shares[0]
+
+    def average(self, current_action, opponent_actions):
+      # Combine all actions into a single demand list
+      opp1_action = opponent_actions[0][0]
+      opp2_action = opponent_actions[1][0]
+      demand = [current_action, opp1_action, opp2_action]
+
+      def costfunc(quantity, fixed_cost=10, variable_cost=0.06):
+            total_cost = variable_cost * quantity**2
+            return total_cost
+
+      # Calculate the total demand
+      total_demand = sum(demand)
+
+      # Avoid division by zero
+      if total_demand == 0:
+          return 0
+
+      costshare = np.zeros(len(demand))
+      # Calculate the cost share
+      for i in range(len(demand)):
+        costshare[i] = costfunc(current_action) * current_action / total_demand
+      return costshare[0]
