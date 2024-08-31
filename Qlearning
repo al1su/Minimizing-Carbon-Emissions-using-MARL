@@ -59,3 +59,23 @@ class QAgent:
     def get_state(self, current_action, opponent_action1, opponent_action2):
       state = (current_action, (opponent_action1, opponent_action2))
       return state
+
+class Qtable:
+    def __init__(self, myactions, opponent_actions):
+        self.myactions = myactions
+        self.opponent_actions = opponent_actions
+        self.q_table = self.initialize_q_table()
+
+    def initialize_q_table(self):
+        """
+        Initialize the Q-table with states formed by combining current actions with opponent actions.
+
+        :return: A dictionary representing the Q-table.
+        """
+        q_table = {}
+        # Combine every possibility of the current action with every possibility of the opponent actions
+        for action_combination in product(self.myactions, self.opponent_actions[0][0], self.opponent_actions[0][1]):
+            current_action, opponent1_action, opponent2_action = action_combination
+            state = (current_action, (opponent1_action, opponent2_action))
+            q_table[state] = {action: 0.0 for action in self.myactions}
+        return q_table
